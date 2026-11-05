@@ -1,0 +1,1570 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="claude:viewport-fit-sides" content="cover">
+<title>Progressive Memory Trainer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&family=Inter+Tight:wght@400;500;600&display=swap">
+<style>
+/* Layout: one centred column. Speeches are set in a serif so they read like printed text,
+   controls sit in a plain grotesk. The ladder is the progress signal; run mode is a transcript. */
+:root {
+  --bg: #f5f4f0;
+  --surface: #fbfbf9;
+  --fg: #1d2026;
+  --muted: #646a76;
+  --line: #d9d7d0;
+  --accent: #8c2b2e;
+  --on-accent: #ffffff;
+  --good: #2c6e50;
+  --bad: #a8362e;
+  --focus: #2b5fa8;
+  --serif: "Newsreader", Georgia, "Times New Roman", serif;
+  --sans: "Inter Tight", "Helvetica Neue", Arial, sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #14161b;
+    --surface: #1b1e25;
+    --fg: #ebe9e4;
+    --muted: #9ca1ad;
+    --line: #313542;
+    --accent: #e0797a;
+    --on-accent: #14161b;
+    --good: #7fc9a2;
+    --bad: #f08a80;
+    --focus: #8fb4ee;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #14161b;
+  --surface: #1b1e25;
+  --fg: #ebe9e4;
+  --muted: #9ca1ad;
+  --line: #313542;
+  --accent: #e0797a;
+  --on-accent: #14161b;
+  --good: #7fc9a2;
+  --bad: #f08a80;
+  --focus: #8fb4ee;
+  color-scheme: dark;
+}
+
+body {
+  margin: 0;
+  font: 15px/1.5 var(--sans);
+  background: var(--bg);
+  color: var(--fg);
+  padding-block: 28px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.wrap { max-width: 680px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+h1, h2 { font-family: var(--serif); font-weight: 500; margin: 0; text-wrap: balance; }
+h1 { font-size: 30px; line-height: 1.15; }
+h2 { font-size: 24px; }
+.sub { margin: 4px 0 0; color: var(--muted); max-width: 54ch; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 20px; min-width: 0; }
+.label { display: block; font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+.hint, .keys, .muted { font-size: 13px; color: var(--muted); margin: 8px 0 0; }
+.msg { font-size: 13px; color: var(--muted); }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+input[type="radio"], input[type="checkbox"] { accent-color: var(--accent); }
+
+textarea {
+  width: 100%;
+  box-sizing: border-box;
+  font: 16px/1.55 var(--serif);
+  color: var(--fg);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 12px 14px;
+  resize: vertical;
+}
+
+.row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 16px; }
+.spacer { flex: 1; }
+.seg { border: 0; padding: 0; margin: 16px 0 0; display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
+.seg legend { float: left; width: 100%; margin-bottom: 8px; }
+.seg label { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; }
+
+.btn {
+  font: inherit;
+  font-size: 14px;
+  padding: 9px 16px;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--fg);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
+.btn.ghost:hover { border-color: var(--muted); }
+.btn:disabled { opacity: .45; cursor: default; }
+.btn.small { padding: 6px 10px; font-size: 13px; }
+
+#speakers { margin-top: 16px; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip {
+  font: inherit;
+  font-size: 13px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--fg);
+  cursor: pointer;
+}
+.chip[aria-pressed="true"] { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+
+/* Practice */
+.meta { display: flex; justify-content: space-between; align-items: center; gap: 12px; font-size: 13px; color: var(--muted); }
+.ladder { display: flex; gap: 6px; list-style: none; margin: 14px 0 0; padding: 0; }
+.ladder li { flex: 1; height: 6px; border-radius: 3px; background: var(--line); }
+.ladder li.done { background: var(--fg); }
+.ladder li.current { background: var(--accent); }
+.level-name { font-size: 13px; font-weight: 600; letter-spacing: .04em; color: var(--muted); margin-top: 10px; }
+
+.cue { margin-top: 18px; }
+.cue-speaker { display: block; font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.cue-text { font: 18px/1.5 var(--serif); margin: 6px 0 0; color: var(--muted); text-wrap: pretty; }
+
+.line { font: 20px/1.75 var(--serif); margin-top: 18px; text-wrap: pretty; overflow-wrap: anywhere; }
+.line[hidden], #free[hidden], #choices[hidden] { display: none; }
+#free { margin-top: 18px; }
+
+/* Typed blanks */
+.blank { white-space: nowrap; }
+.blank input {
+  font: inherit;
+  color: var(--fg);
+  background: transparent;
+  border: 0;
+  border-bottom: 1.5px solid var(--line);
+  padding: 0 2px;
+  margin: 0;
+  max-width: 100%;
+  border-radius: 0;
+}
+.blank input:focus { outline: none; border-bottom-color: var(--focus); }
+.blank.right input { border-bottom-color: var(--good); color: var(--good); }
+.blank.wrong input { border-bottom-color: var(--bad); color: var(--bad); }
+.blank .lead { font-weight: 600; color: var(--muted); }
+.blank .ans { display: none; color: var(--accent); font-weight: 600; }
+.blank.wrong .ans { display: inline; margin-left: 6px; }
+.blank.wrong .lead { display: none; }
+/* Initial-letter reveal: the typed letter swaps the blank for the full word */
+.blank.assist input { display: none; }
+.blank.assist .ans { display: inline; color: var(--focus); font-weight: 500; }
+
+/* Word-bank gaps */
+.gap { font: inherit; color: var(--fg); background: transparent; border: 0; border-bottom: 1.5px solid var(--muted); border-radius: 0; padding: 0 4px; margin: 0; cursor: pointer; display: inline-block; text-align: center; white-space: nowrap; touch-action: manipulation; }
+.gap.active { background: color-mix(in srgb, var(--focus) 16%, transparent); border-bottom-color: var(--focus); }
+.gap .ans { display: none; color: var(--accent); font-weight: 600; }
+.gap.right .pick { color: var(--good); }
+.gap.wrong { border-bottom-color: var(--bad); }
+.gap.wrong .pick { color: var(--bad); text-decoration: line-through; }
+.gap.wrong .ans { display: inline; margin-left: 6px; }
+.bank { display: flex; flex-wrap: wrap; gap: 8px; }
+#choices { margin-top: 18px; }
+.opt { font: inherit; font-size: 15px; padding: 8px 14px; border-radius: 4px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); cursor: pointer; touch-action: manipulation; }
+.opt:disabled { opacity: .3; cursor: default; }
+.blank.bad-letter input { border-bottom-color: var(--bad); }
+.modebar { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 14px; font-size: 13px; color: var(--muted); }
+.modebar select { font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 4px 6px; }
+
+/* Ladder meter */
+.modebar.jump { align-items: center; }
+.meter { margin-top: 14px; }
+.meter-head { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; font-weight: 600; }
+.meter-head span:last-child { color: var(--muted); font-weight: 500; font-variant-numeric: tabular-nums; }
+.track { position: relative; height: 16px; margin-top: 8px; background: var(--line); border-radius: 8px; overflow: hidden; }
+.fillbar { height: 100%; width: 0; background: var(--accent); border-radius: 8px; transition: width .6s cubic-bezier(.3,.7,.3,1), background-color .3s; }
+.meter[data-move="up"] .fillbar { background: var(--good); }
+.meter[data-move="down"] .fillbar { background: var(--bad); }
+.track::after { content: ""; position: absolute; inset: 0; background: repeating-linear-gradient(to right, transparent 0, transparent calc(100% / 7 - 2px), var(--surface) calc(100% / 7 - 2px), var(--surface) calc(100% / 7)); }
+.meter-foot { display: flex; gap: 10px; min-height: 20px; margin-top: 6px; font-size: 13px; color: var(--muted); }
+.delta { font-weight: 700; }
+.delta.up { color: var(--good); }
+.delta.down { color: var(--bad); }
+
+/* Peek and reveal work for both typed and multiple-choice blanks */
+.line.peek .blank input, .line.revealed .blank input { display: none; }
+.line.peek .blank .lead, .line.revealed .blank .lead { display: none; }
+.line.peek .blank .ans, .line.revealed .blank .ans { display: inline; }
+.line.peek .gap-n, .line.revealed .gap-n { display: none; }
+.line.peek .gap .ans, .line.revealed .gap .ans { display: inline; }
+.line.peek .gap .pick, .line.revealed .gap .pick { display: none; }
+
+.feedback { margin-top: 16px; }
+.verdict { margin: 0; font-size: 14px; font-weight: 600; }
+.verdict.good { color: var(--good); }
+.verdict.bad { color: var(--bad); }
+.verdict.note { color: var(--muted); font-weight: 500; }
+.target { font: 17px/1.6 var(--serif); margin: 8px 0 0; }
+.miss { color: var(--bad); text-decoration: underline wavy; text-underline-offset: 3px; }
+
+/* Run the scene */
+.transcript { display: flex; flex-direction: column; gap: 12px; max-height: 50vh; overflow-y: auto; padding-right: 4px; }
+.t-cue, .t-mine, .t-stage { min-width: 0; overflow-wrap: anywhere; }
+.t-cue { font: 17px/1.55 var(--serif); }
+.t-mine { font: 17px/1.55 var(--serif); padding-left: 14px; }
+.t-stage { font-size: 13px; font-style: italic; color: var(--muted); }
+.who { display: block; font: 600 11px/1.2 var(--sans); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 2px; }
+.t-mine .who { color: var(--accent); }
+.run-prompt { border-top: 1px solid var(--line); margin-top: 16px; padding-top: 16px; }
+.run-prompt .cue-text { margin-bottom: 10px; }
+.run-prompt textarea { margin-top: 8px; }
+
+/* Summary */
+.stat { display: grid; grid-template-columns: minmax(0, 1fr) 40px; align-items: center; gap: 4px 12px; padding: 8px 0; border-top: 1px solid var(--line); }
+.stat:first-child { border-top: 0; }
+.stat-label { font-size: 14px; }
+.stat-count { font-size: 14px; text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }
+.stat-track { grid-column: 1 / -1; height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; }
+.stat-fill { height: 100%; background: var(--fg); }
+.stat.learned .stat-fill { background: var(--good); }
+.lead-line { font: 20px/1.4 var(--serif); margin: 6px 0 0; }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <header>
+    <h1>Progressive Memory Trainer</h1>
+    <p class="sub">Practise each monologue through a ladder of harder styles, or fix one level and drill it. You can also run the whole scene in order and answer the cues around you.</p>
+  </header>
+
+  <section id="setup" class="card" aria-labelledby="setupTitle">
+    <h2 id="setupTitle" hidden>Setup</h2>
+    <label class="label" for="source">Script or text</label>
+    <textarea id="source" rows="10" spellcheck="false"></textarea>
+    <p class="hint">Use NAME: line for speeches, with each verse line on its own line. [brackets] are stage directions. [MOVE NAME: action] marks a movement you perform. Any other text becomes passages to practise.</p>
+
+    <div id="speakers" hidden>
+      <span class="label">I play (choose all your roles)</span>
+      <div id="speakerChips" class="chips"></div>
+    </div>
+
+    <fieldset class="seg" id="styleSet">
+      <legend class="label">Practice level</legend>
+      <label><input type="radio" name="style" value="ladder"> Progressive ladder</label>
+      <label><input type="radio" name="style" value="0"> Read aloud</label>
+      <label><input type="radio" name="style" value="1"> Hidden words: easy</label>
+      <label><input type="radio" name="style" value="2"> Hidden words: medium</label>
+      <label><input type="radio" name="style" value="3"> Hidden words: hard</label>
+      <label><input type="radio" name="style" value="4"> First letter shown</label>
+      <label><input type="radio" name="style" value="5"> Blank, first letter reveals word</label>
+      <label><input type="radio" name="style" value="6"> Recall from cue</label>
+    </fieldset>
+    <p class="hint">Easy hides about one word in three, medium about half, hard every word. On the ladder, every passage is read aloud once before any of them moves on to hidden words. After that, one clean recall clears a level, two clean recalls in a row jump two levels, and only a clearly missed attempt moves you back. A fixed level drills one kind of practice and does not change anyone’s progress.</p>
+
+    <fieldset class="seg">
+      <legend class="label">Answer hidden words by</legend>
+      <label><input type="radio" name="answer" value="choice"> Word bank (multiple choice)</label>
+      <label><input type="radio" name="answer" value="type"> Typing</label>
+    </fieldset>
+
+    <div class="row">
+      <p id="setupMsg" class="msg" role="status"></p>
+    </div>
+    <div class="row">
+      <span class="spacer"></span>
+      <button id="begin" class="btn ghost" disabled>Practise lines</button>
+      <button id="runBegin" class="btn primary" disabled>Run the scene</button>
+    </div>
+  </section>
+
+  <section id="train" class="card" hidden aria-label="Practice">
+    <div class="meta">
+      <span id="passage"></span>
+      <button id="leave" class="btn ghost small">Progress</button>
+    </div>
+    <div id="meter" class="meter">
+      <div class="meter-head"><span id="meterTxt"></span><span id="meterSub"></span></div>
+      <div class="track" role="progressbar" aria-label="Ladder progress"><div id="fill" class="fillbar"></div></div>
+      <div class="meter-foot"><span id="delta" class="delta"></span><span id="meterNote" aria-live="polite"></span></div>
+    </div>
+    <div id="levelName" class="level-name"></div>
+    <div class="modebar">
+      <label>Mode <select id="modeSel"></select></label>
+      <label id="ansWrap">Answer <select id="ansSel"><option value="choice">Word bank</option><option value="type">Typing</option></select></label>
+    </div>
+
+    <div id="cue" class="cue"></div>
+    <div id="line" class="line"></div>
+    <div id="choices" class="choices" hidden></div>
+    <textarea id="free" rows="5" hidden placeholder="Type the monologue from memory" spellcheck="false"></textarea>
+
+    <div id="feedback" class="feedback" hidden aria-live="polite"></div>
+
+    <div class="row">
+      <button id="peek" class="btn ghost">Hold to peek</button>
+      <button id="reveal" class="btn ghost">Show answers</button>
+      <span class="spacer"></span>
+      <button id="retry" class="btn ghost" hidden>Try again</button>
+      <button id="said" class="btn primary" hidden>I said it aloud</button>
+      <button id="check" class="btn primary">Check</button>
+      <button id="next" class="btn primary" hidden>Next</button>
+    </div>
+    <p class="keys">Word bank: tap a gap, then a word (or just tap words to fill gaps in order). Typing: Enter moves to the next blank, Ctrl or Cmd + Enter checks. On the ladder, a clean recall moves the bar up a level (two in a row jump two), a bad miss moves it down, a near miss or a peek holds it.</p>
+  </section>
+
+  <section id="run" class="card" hidden aria-label="Run the scene">
+    <div class="meta">
+      <span>Running the scene</span>
+      <button id="runLeave" class="btn ghost small">Setup</button>
+    </div>
+    <div id="runTranscript" class="transcript" aria-live="polite"></div>
+    <div id="runPrompt" class="run-prompt"></div>
+    <p class="keys">The other characters' speeches and movements appear on their own. When it is your turn, type your speech from memory, or tap Done once you have made your move. The page cannot hear or see you, so movement is self-checked.</p>
+  </section>
+
+  <section id="summary" class="card" hidden aria-labelledby="sumTitle">
+    <h2 id="sumTitle">Progress</h2>
+    <p id="sumLead" class="lead-line"></p>
+    <div id="stats" style="margin-top:14px"></div>
+    <div id="jumpBlock" class="modebar jump" style="margin-top:16px">
+      <label>Jump ahead to <select id="jumpSel"></select></label>
+      <button id="jumpAll" class="btn ghost small">Move all passages</button>
+      <span id="jumpMsg" class="msg" role="status"></span>
+    </div>
+    <div class="row">
+      <button id="continue" class="btn primary" hidden>Keep training</button>
+      <button id="review" class="btn ghost" hidden>Review learned</button>
+      <span class="spacer"></span>
+      <button id="resetProg" class="btn ghost">Reset ladder</button>
+      <button id="back" class="btn ghost">Back to setup</button>
+    </div>
+  </section>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const norm = w => w.replace(/[‘’]/g, "'").toLowerCase().replace(/[^\p{L}\p{N}']/gu, '').replace(/^'+|'+$/g, '');
+const hash = s => { let h = 5381; for (const ch of s) h = (((h << 5) + h) + ch.codePointAt(0)) | 0; return (h >>> 0).toString(36); };
+const shuffle = arr => { for (let k = arr.length - 1; k > 0; k--) { const j = Math.floor(Math.random() * (k + 1)); [arr[k], arr[j]] = [arr[j], arr[k]]; } return arr; };
+const splitWord = raw => { const m = raw.match(/^([^\p{L}\p{N}]*)(.*?)([^\p{L}\p{N}]*)$/u); return { pre: m[1], core: m[2], post: m[3] }; };
+
+const SAVE_KEY = 'progressive-trainer:setup:v5';
+const PROG_KEY = 'progressive-trainer:progress:v4';
+const STEPS = 2; // clean recalls needed to clear one level
+const OLD_SAMPLE = `Two households, both alike in dignity,
+In fair Verona, where we lay our scene,
+From ancient grudge break to new mutiny,
+Where civil blood makes civil hands unclean.`;
+const SAMPLE = `[Enter Sampson and Gregory, with swords and bucklers, of the house of Capulet.]
+
+SAMPSON: Gregory, on my word we’ll not carry coals.
+
+GREGORY: No, for then we should be colliers.
+
+SAMPSON: I mean, an we be in choler, we’ll draw.
+
+GREGORY: Ay, while you live, draw your neck out of
+collar.
+
+SAMPSON: I strike quickly, being moved.
+
+GREGORY: But thou art not quickly moved to strike.
+
+SAMPSON: A dog of the house of Montague moves me.
+
+GREGORY: To move is to stir, and to be valiant is to
+stand. Therefore if thou art moved thou runn’st
+away.
+
+SAMPSON: A dog of that house shall move me to stand. I
+will take the wall of any man or maid of Montague’s.
+
+GREGORY: That shows thee a weak slave, for the weakest
+goes to the wall.
+
+SAMPSON: ’Tis true, and therefore women, being the
+weaker vessels, are ever thrust to the wall. Therefore
+I will push Montague’s men from the wall and
+thrust his maids to the wall.
+
+GREGORY: The quarrel is between our masters and us
+their men.
+
+SAMPSON: ’Tis all one. I will show myself a tyrant.
+When I have fought with the men, I will be civil
+with the maids; I will cut off their heads.
+
+GREGORY: The heads of the maids?
+
+SAMPSON: Ay, the heads of the maids, or their maidenheads.
+Take it in what sense thou wilt.
+
+GREGORY: They must take it in sense that feel it.
+
+SAMPSON: Me they shall feel while I am able to stand,
+and ’tis known I am a pretty piece of flesh.
+
+GREGORY: ’Tis well thou art not fish; if thou hadst, thou
+hadst been poor-john. Draw thy tool. Here comes
+of the house of Montagues.
+
+[Enter Abram.]
+
+SAMPSON: My naked weapon is out. Quarrel, I will back
+thee.
+
+GREGORY: How? Turn thy back and run?
+
+SAMPSON: Fear me not.
+
+GREGORY: No, marry. I fear thee!
+
+SAMPSON: Let us take the law of our sides; let them
+begin.
+
+GREGORY: I will frown as I pass by, and let them take it
+as they list.
+
+SAMPSON: Nay, as they dare. I will bite my thumb at
+them, which is disgrace to them if they bear it.
+
+[He bites his thumb.]
+
+ABRAM: Do you bite your thumb at us, sir?
+
+SAMPSON: I do bite my thumb, sir.
+
+ABRAM: Do you bite your thumb at us, sir?
+
+SAMPSON: [aside to Gregory] Is the law of our side if I
+say “Ay”?
+
+GREGORY: [aside to Sampson] No.
+
+SAMPSON: No, sir, I do not bite my thumb at you, sir,
+but I bite my thumb, sir.
+
+GREGORY: Do you quarrel, sir?
+
+ABRAM: Quarrel, sir? No, sir.
+
+SAMPSON: But if you do, sir, I am for you. I serve as
+good a man as you.
+
+ABRAM: No better.
+
+SAMPSON: Well, sir.
+
+[Enter Benvolio.]
+
+GREGORY: [aside to Sampson] Say “better”; here comes
+one of my master’s kinsmen.
+
+SAMPSON: Yes, better, sir.
+
+ABRAM: You lie.
+
+SAMPSON: Draw if you be men.—Gregory, remember
+thy washing blow.
+
+[They fight.]
+
+BENVOLIO: [Drawing his sword.] Part, fools! Put up your swords. You know not what you do.
+
+[The fighters stop fighting.]
+
+[MOVE TYBALT: Enter, drawing his sword.]
+
+TYBALT: What, art thou drawn among these heartless hinds?
+Turn thee, Benvolio; look upon thy death.
+
+BENVOLIO: I do but keep the peace. Put up thy sword,
+Or manage it to part these men with me.
+
+TYBALT: What, drawn and talk of peace? I hate the word
+As I hate hell, all Montagues, and thee.
+Have at thee, coward!
+
+[MOVE TYBALT: They fight.]
+
+[Enter three or four Citizens with clubs or partisans.]
+
+CITIZENS: Clubs, bills, and partisans! Strike! Beat them down!
+Down with the Capulets! Down with the Montagues!
+
+[Enter old Capulet in his gown, and his Wife.]
+
+CAPULET: What noise is this? Give me my long sword, ho!
+
+LADY CAPULET: A crutch, a crutch! Why call you for a
+sword?
+
+[Enter old Montague and his Wife.]
+
+CAPULET: My sword, I say. Old Montague is come
+And flourishes his blade in spite of me.
+
+MONTAGUE: Thou villain Capulet!—Hold me not; let me go.
+
+LADY MONTAGUE: Thou shalt not stir one foot to seek a foe.
+
+[Enter Prince Escalus with his train.]
+
+PRINCE: Rebellious subjects, enemies to peace,
+Profaners of this neighbor-stainèd steel—
+Will they not hear?—What ho! You men, you beasts,
+That quench the fire of your pernicious rage
+With purple fountains issuing from your veins:
+On pain of torture, from those bloody hands
+Throw your mistempered weapons to the ground,
+And hear the sentence of your movèd prince.
+Three civil brawls bred of an airy word
+By thee, old Capulet, and Montague,
+Have thrice disturbed the quiet of our streets
+And made Verona’s ancient citizens
+Cast by their grave-beseeming ornaments
+To wield old partisans in hands as old,
+Cankered with peace, to part your cankered hate.
+If ever you disturb our streets again,
+Your lives shall pay the forfeit of the peace.
+For this time all the rest depart away.
+You, Capulet, shall go along with me,
+And, Montague, come you this afternoon
+To know our farther pleasure in this case,
+To old Free-town, our common judgment-place.
+Once more, on pain of death, all men depart.
+
+[All but Montague, Lady Montague, and Benvolio exit.]
+
+MONTAGUE: Who set this ancient quarrel new abroach? Speak, nephew, were you by when it began?
+
+BENVOLIO: Here were the servants of your adversary,
+And yours, close fighting ere I did approach.
+I drew to part them. In the instant came
+The fiery Tybalt with his sword prepared,
+Which, as he breathed defiance to my ears,
+He swung about his head and cut the winds,
+Who, nothing hurt withal, hissed him in scorn.
+While we were interchanging thrusts and blows
+Came more and more and fought on part and part,
+Till the Prince came, who parted either part.
+
+LADY MONTAGUE: O, where is Romeo? Saw you him today?
+Right glad I am he was not at this fray.
+
+BENVOLIO: Madam, an hour before the worshiped sun
+Peered forth the golden window of the east,
+A troubled mind drove me to walk abroad,
+Where underneath the grove of sycamore
+That westward rooteth from this city side,
+So early walking did I see your son.
+Towards him I made, but he was ’ware of me
+And stole into the covert of the wood.
+I, measuring his affections by my own
+(Which then most sought where most might not be
+found,
+Being one too many by my weary self),
+Pursued my humor, not pursuing his,
+And gladly shunned who gladly fled from me.
+
+MONTAGUE: Many a morning hath he there been seen,
+With tears augmenting the fresh morning’s dew,
+Adding to clouds more clouds with his deep sighs.
+But all so soon as the all-cheering sun
+Should in the farthest east begin to draw
+The shady curtains from Aurora’s bed,
+Away from light steals home my heavy son
+And private in his chamber pens himself,
+Shuts up his windows, locks fair daylight out,
+And makes himself an artificial night.
+Black and portentous must this humor prove,
+Unless good counsel may the cause remove.
+
+BENVOLIO: My noble uncle, do you know the cause?
+
+MONTAGUE: I neither know it nor can learn of him.
+
+BENVOLIO: Have you importuned him by any means?
+
+MONTAGUE: Both by myself and many other friends.
+But he, his own affections’ counselor,
+Is to himself—I will not say how true,
+But to himself so secret and so close,
+So far from sounding and discovery,
+As is the bud bit with an envious worm
+Ere he can spread his sweet leaves to the air
+Or dedicate his beauty to the same.
+Could we but learn from whence his sorrows grow,
+We would as willingly give cure as know.
+
+[MOVE ROMEO: Enter.]
+
+BENVOLIO: See where he comes. So please you, step aside.
+I’ll know his grievance or be much denied.
+
+MONTAGUE: I would thou wert so happy by thy stay
+To hear true shrift.—Come, madam, let’s away.
+
+[Montague and Lady Montague exit.]
+
+BENVOLIO: Good morrow, cousin.
+
+ROMEO: Is the day so young?
+
+BENVOLIO: But new struck nine.
+
+ROMEO: Ay me, sad hours seem long.
+Was that my father that went hence so fast?
+
+BENVOLIO: It was. What sadness lengthens Romeo’s hours?
+
+ROMEO: Not having that which, having, makes them short.
+
+BENVOLIO: In love?
+
+ROMEO: Out—
+
+BENVOLIO: Of love?
+
+ROMEO: Out of her favor where I am in love.
+
+BENVOLIO: Alas that love, so gentle in his view,
+Should be so tyrannous and rough in proof!
+
+ROMEO: Alas that love, whose view is muffled still,
+Should without eyes see pathways to his will!
+Where shall we dine?—O me! What fray was here?
+Yet tell me not, for I have heard it all.
+Here’s much to do with hate, but more with love.
+Why then, O brawling love, O loving hate,
+O anything of nothing first create!
+O heavy lightness, serious vanity,
+Misshapen chaos of well-seeming forms,
+Feather of lead, bright smoke, cold fire, sick health,
+Still-waking sleep that is not what it is!
+This love feel I, that feel no love in this.
+Dost thou not laugh?
+
+BENVOLIO: No, coz, I rather weep.
+
+ROMEO: Good heart, at what?
+
+BENVOLIO: At thy good heart’s oppression.
+
+ROMEO: Why, such is love’s transgression.
+Griefs of mine own lie heavy in my breast,
+Which thou wilt propagate to have it pressed
+With more of thine. This love that thou hast shown
+Doth add more grief to too much of mine own.
+Love is a smoke made with the fume of sighs;
+Being purged, a fire sparkling in lovers’ eyes;
+Being vexed, a sea nourished with loving tears.
+What is it else? A madness most discreet,
+A choking gall, and a preserving sweet.
+Farewell, my coz.
+
+BENVOLIO: Soft, I will go along.
+An if you leave me so, you do me wrong.
+
+ROMEO: Tut, I have lost myself. I am not here.
+This is not Romeo. He’s some other where.
+
+BENVOLIO: Tell me in sadness, who is that you love?
+
+ROMEO: What, shall I groan and tell thee?
+
+BENVOLIO: Groan? Why, no. But sadly tell me who.
+
+ROMEO: A sick man in sadness makes his will—
+A word ill urged to one that is so ill.
+In sadness, cousin, I do love a woman.
+
+BENVOLIO: I aimed so near when I supposed you loved.
+
+ROMEO: A right good markman! And she’s fair I love.
+
+BENVOLIO: A right fair mark, fair coz, is soonest hit.
+
+ROMEO: Well in that hit you miss. She’ll not be hit
+With Cupid’s arrow. She hath Dian’s wit,
+And, in strong proof of chastity well armed,
+From love’s weak childish bow she lives uncharmed.
+She will not stay the siege of loving terms,
+Nor bide th’ encounter of assailing eyes,
+Nor ope her lap to saint-seducing gold.
+O, she is rich in beauty, only poor
+That, when she dies, with beauty dies her store.
+
+BENVOLIO: Then she hath sworn that she will still live chaste?
+
+ROMEO: She hath, and in that sparing makes huge waste;
+For beauty, starved with her severity,
+Cuts beauty off from all posterity.
+She is too fair, too wise, wisely too fair,
+To merit bliss by making me despair.
+She hath forsworn to love, and in that vow
+Do I live dead, that live to tell it now.
+
+BENVOLIO: Be ruled by me. Forget to think of her.
+
+ROMEO: O, teach me how I should forget to think!
+
+BENVOLIO: By giving liberty unto thine eyes.
+Examine other beauties.
+
+ROMEO: ’Tis the way
+To call hers, exquisite, in question more.
+These happy masks that kiss fair ladies’ brows,
+Being black, puts us in mind they hide the fair.
+He that is strucken blind cannot forget
+The precious treasure of his eyesight lost.
+Show me a mistress that is passing fair;
+What doth her beauty serve but as a note
+Where I may read who passed that passing fair?
+Farewell. Thou canst not teach me to forget.
+
+BENVOLIO: I’ll pay that doctrine or else die in debt.
+
+[MOVE ROMEO: They exit.]
+`;
+
+// Practice levels, easiest first. Progress 0..6 is active; LEARNED means the ladder is finished.
+//   mode 'read': the text is shown whole
+//   mode 'blank': words are hidden. perLine = how many per physical line ('all' hides every word).
+//     lead: each blank shows its first letter. initial: typing a blank's first letter reveals the word.
+//     choice: this level can be answered by multiple choice when that setting is on.
+//   mode 'free': recall from the cue with nothing shown
+const LEVELS = [
+  { name: 'Read aloud', mode: 'read' },
+  { name: 'Hidden words: easy (about 1 in 3)', mode: 'blank', perLine: 'mix', choice: true },
+  { name: 'Hidden words: medium (about half)', mode: 'blank', perLine: 'half', choice: true },
+  { name: 'Hidden words: hard (every word)', mode: 'blank', perLine: 'all', choice: true },
+  { name: 'First letter shown', mode: 'blank', perLine: 'all', lead: true },
+  { name: 'Blank, first letter reveals word', mode: 'blank', perLine: 'all', initial: true },
+  { name: 'Recall from cue', mode: 'free' }
+];
+const TOP = LEVELS.length - 1;
+const LEARNED = LEVELS.length;
+
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
+};
+
+let progress = store.get(PROG_KEY, null);
+if (!progress) { // carry over level-based progress from the old version
+  progress = {};
+  const old = store.get('progressive-trainer:progress:v3', {});
+  Object.keys(old).forEach(id => { progress[id] = { pts: (old[id].level || 0) * STEPS, seen: 0, passes: old[id].passes || 0, misses: old[id].misses || 0 }; });
+}
+const prog = id => progress[id] || (progress[id] = { pts: 0, seen: 0, passes: 0, misses: 0 });
+const MAX = () => LEVELS.length * STEPS;
+const lvlOfPts = p => Math.min(TOP, Math.floor(p / STEPS));
+const saveProgress = () => store.set(PROG_KEY, progress);
+
+const state = {
+  mode: 'text', blocks: [], roles: [], style: 'ladder', answerMode: 'type',
+  chunks: [], wordList: [],
+  cur: null, tokens: [], mask: new Set(), hiddenOrder: [], opts: {}, picks: {},
+  phase: 'attempt', helped: false, lvl: 0, bank: [], gaps: {}, active: null, scored: false, missed: new Set(), result: null, ratio: 0,
+  run: null
+};
+
+const levelOf = c => state.style === 'ladder' ? lvlOfPts(prog(c.id).pts) : state.style;
+const fixed = () => state.style !== 'ladder';
+const isChoice = cfg => cfg.mode === 'blank' && !!cfg.choice && state.answerMode === 'choice';
+const unitName = () => state.mode === 'script' ? 'Monologue' : 'Passage';
+
+/* ---------- parsing ---------- */
+
+// Speech blocks keep their physical lines, so a monologue's verse lines can be counted.
+function parseScript(src) {
+  const blocks = [];
+  for (const raw of src.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line) continue;
+    const mv = line.match(/^\[MOVE\s+([A-Z][A-Z .'-]*?):\s*(.*)\]$/);
+    if (mv) { blocks.push({ kind: 'move', who: mv[1].trim().toUpperCase(), text: mv[2].trim() }); continue; }
+    if (line.startsWith('[')) { blocks.push({ kind: 'stage', text: line.replace(/^\[|\]$/g, '').trim() }); continue; }
+    const m = line.match(/^([A-Za-z][A-Za-z .'-]{0,29}):\s*(.*)$/);
+    if (m) { blocks.push({ kind: 'speech', speaker: m[1].trim().toUpperCase(), lines: [m[2].trim()] }); continue; }
+    const last = blocks[blocks.length - 1];
+    if (last && last.kind === 'speech') last.lines.push(line);
+  }
+  return blocks
+    .map(b => b.kind === 'speech' ? { ...b, lines: b.lines.filter(Boolean), text: b.lines.filter(Boolean).join(' ') } : b)
+    .filter(b => b.kind !== 'speech' || b.lines.length);
+}
+
+function speakersOf(blocks) {
+  const count = {};
+  blocks.forEach(b => { if (b.kind === 'speech') count[b.speaker] = (count[b.speaker] || 0) + 1; });
+  return Object.keys(count).sort((a, b) => count[b] - count[a]);
+}
+
+// Practice chunks. In script mode each of my monologues is one chunk, with the speech before it as the cue.
+function buildChunks() {
+  if (state.mode === 'script') {
+    if (!state.roles.length) return [];
+    const out = [];
+    let last = null;
+    state.blocks.forEach(b => {
+      if (b.kind !== 'speech') return;
+      if (state.roles.includes(b.speaker)) {
+        out.push({ id: hash(b.text), text: b.text, lines: b.lines, cue: last ? last.text : null, cueSpeaker: last ? last.speaker : null });
+      }
+      last = b;
+    });
+    return out;
+  }
+  const out = [];
+  $('source').value.split(/\n+/).forEach(line => {
+    line.trim().split(/(?<=[.!?])\s+/).forEach(s => {
+      const t = s.trim();
+      if (t) out.push({ id: hash(t), text: t, lines: [t], cue: null, cueSpeaker: null });
+    });
+  });
+  return out.slice(0, 300);
+}
+
+// Every distinct word in the text, used to build the wrong answers for multiple choice.
+function buildWordList() {
+  const texts = state.mode === 'script'
+    ? state.blocks.filter(b => b.kind === 'speech').map(b => b.text)
+    : [$('source').value];
+  const seen = new Map();
+  texts.forEach(t => t.split(/\s+/).forEach(raw => {
+    const { core } = splitWord(raw);
+    const n = norm(core);
+    if (n && !seen.has(n)) seen.set(n, core);
+  }));
+  state.wordList = [...seen.values()];
+}
+
+// Run items in script order: other characters' speeches and stage directions are shown,
+// my speeches and movements need a response.
+function buildRun() {
+  const mine = new Set(state.roles);
+  const items = [];
+  state.blocks.forEach(b => {
+    if (b.kind === 'speech') {
+      items.push({ kind: mine.has(b.speaker) ? 'line' : 'cue', speaker: b.speaker, lines: b.lines, text: b.text });
+    } else if (b.kind === 'move') {
+      items.push(mine.has(b.who)
+        ? { kind: 'move', who: b.who, text: b.text }
+        : { kind: 'stage', text: `${b.who}: ${b.text}` });
+    } else {
+      items.push({ kind: 'stage', text: b.text });
+    }
+  });
+  return items;
+}
+
+// Tokens keep the physical line they sit on, so hiding can be done per line.
+function tokenize(lines) {
+  const toks = [];
+  lines.forEach((line, li) => line.split(/\s+/).filter(Boolean).forEach(raw => {
+    toks.push({ ...splitWord(raw), li });
+  }));
+  return toks;
+}
+
+// Chooses which words to hide: a fixed number per physical line, or every word on the line.
+function makeMask(toks, cfg) {
+  const hidden = new Set();
+  if (cfg.mode !== 'blank') return hidden;
+  const idx = [];
+  toks.forEach((t, k) => { if (t.core) idx.push(k); });
+  if (cfg.perLine === 'all') { idx.forEach(k => hidden.add(k)); return hidden; }
+  // Walk the passage in groups of 2-3 words (easy) or 2 words (medium) and hide one word per group.
+  for (let i = 0; i < idx.length;) {
+    const g = cfg.perLine === 'half' ? 2 : (Math.random() < .5 ? 2 : 3);
+    const grp = idx.slice(i, i + g);
+    if (grp.length >= 2) hidden.add(grp[Math.floor(Math.random() * grp.length)]);
+    i += g;
+  }
+  if (!hidden.size && idx.length) hidden.add(idx[0]);
+  return hidden;
+}
+
+// Three wrong answers for a multiple-choice gap, preferring words of similar length.
+function distractors(core) {
+  const a = norm(core);
+  const pool = shuffle(state.wordList.filter(w => norm(w) !== a));
+  pool.sort((x, y) => Math.abs(x.length - core.length) - Math.abs(y.length - core.length));
+  const out = [], used = new Set([a]);
+  for (const w of pool) {
+    const n = norm(w);
+    if (used.has(n)) continue;
+    used.add(n);
+    out.push(w);
+    if (out.length === 3) break;
+  }
+  return out;
+}
+
+/* ---------- grading ---------- */
+
+function lcsHits(T, U) {
+  const n = T.length, m = U.length;
+  const dp = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(0));
+  for (let i = n - 1; i >= 0; i--)
+    for (let j = m - 1; j >= 0; j--)
+      dp[i][j] = T[i] === U[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+  const hit = new Array(n).fill(false);
+  let i = 0, j = 0;
+  while (i < n && j < m) {
+    if (T[i] === U[j]) { hit[i] = true; i++; j++; }
+    else if (dp[i + 1][j] >= dp[i][j + 1]) i++;
+    else j++;
+  }
+  return hit;
+}
+
+function grade(target, typed) {
+  const tokens = target.split(/\s+/).filter(Boolean);
+  const scoreIdx = [];
+  tokens.forEach((t, k) => { if (norm(t)) scoreIdx.push(k); });
+  const T = scoreIdx.map(k => norm(tokens[k]));
+  const U = typed.split(/\s+/).map(norm).filter(Boolean);
+  const hitS = lcsHits(T, U);
+  const hit = tokens.map(() => true);
+  scoreIdx.forEach((k, p) => { hit[k] = hitS[p]; });
+  const score = T.length ? hitS.filter(Boolean).length / T.length : 1;
+  return { tokens, hit, score };
+}
+
+/* ---------- setup ---------- */
+
+function saveSetup() {
+  store.set(SAVE_KEY, { source: $('source').value, roles: state.roles, style: state.style, answer: state.answerMode });
+}
+
+function refreshSetup() {
+  const src = $('source').value;
+  state.blocks = parseScript(src);
+  const names = speakersOf(state.blocks);
+  state.mode = names.length >= 2 ? 'script' : 'text';
+  state.roles = state.mode === 'script' ? state.roles.filter(r => names.includes(r)) : [];
+  buildWordList();
+
+  $('speakers').hidden = state.mode !== 'script';
+  $('speakerChips').innerHTML = state.mode === 'script'
+    ? names.map(n => `<button class="chip" data-name="${esc(n)}" aria-pressed="${state.roles.includes(n)}">${esc(n)}</button>`).join('')
+    : '';
+
+  const chunks = buildChunks();
+  const runItems = state.mode === 'script' ? buildRun().filter(i => i.kind === 'line' || i.kind === 'move') : [];
+  let msg = '';
+  if (!src.trim()) msg = '';
+  else if (state.mode === 'script' && !state.roles.length) msg = `Script with ${names.length} speakers. Choose the roles you play.`;
+  else if (state.mode === 'script') {
+    const lines = chunks.reduce((n, c) => n + c.lines.length, 0);
+    const moves = runItems.filter(i => i.kind === 'move').length;
+    msg = `${chunks.length} monologues, ${lines} lines. The scene run has ${runItems.length - moves} speeches and ${moves} movements.`;
+  } else msg = chunks.length ? `${chunks.length} passages ready.` : 'Nothing to train. Check the text.';
+  $('setupMsg').textContent = msg;
+  $('begin').disabled = !chunks.length;
+  $('runBegin').disabled = !runItems.length;
+  saveSetup();
+}
+
+$('source').addEventListener('input', refreshSetup);
+$('speakerChips').addEventListener('click', e => {
+  const b = e.target.closest('.chip');
+  if (!b) return;
+  const name = b.dataset.name;
+  state.roles = state.roles.includes(name) ? state.roles.filter(r => r !== name) : [...state.roles, name];
+  refreshSetup();
+});
+document.querySelectorAll('input[name="style"]').forEach(r => r.addEventListener('change', () => {
+  const v = document.querySelector('input[name="style"]:checked').value;
+  state.style = v === 'ladder' ? 'ladder' : Number(v);
+  saveSetup();
+}));
+document.querySelectorAll('input[name="answer"]').forEach(r => r.addEventListener('change', () => {
+  state.answerMode = document.querySelector('input[name="answer"]:checked').value;
+  saveSetup();
+}));
+
+/* ---------- navigation ---------- */
+
+function show(view) {
+  $('setup').hidden = view !== 'setup';
+  $('train').hidden = view !== 'train';
+  $('summary').hidden = view !== 'summary';
+  $('run').hidden = view !== 'run';
+}
+
+function pickNext() {
+  const pool = state.chunks.filter(c => fixed() || prog(c.id).pts < MAX());
+  if (!pool.length) return null;
+  if (!fixed()) {
+    // Read-through first: every passage gets read aloud once, in script order, before any moves on to hidden words.
+    const unread = state.chunks.filter(c => !prog(c.id).read && prog(c.id).pts === 0);
+    if (unread.length) return unread.find(c => c !== state.cur) || unread[0];
+  }
+  pool.sort((a, b) => fixed()
+    ? (prog(a.id).seen - prog(b.id).seen)
+    : (prog(a.id).pts - prog(b.id).pts) || (prog(a.id).seen - prog(b.id).seen));
+  return pool.find(c => c !== state.cur) || pool[0];
+}
+
+$('begin').addEventListener('click', () => {
+  state.chunks = buildChunks();
+  if (!state.chunks.length) return;
+  const c = pickNext();
+  if (!c) return showSummary();
+  show('train');
+  startAttempt(c);
+});
+
+$('leave').addEventListener('click', showSummary);
+$('runLeave').addEventListener('click', () => show('setup'));
+$('back').addEventListener('click', () => show('setup'));
+// Two-tap reset: first tap asks, second tap wipes all ladder progress.
+let resetTimer;
+$('resetProg').addEventListener('click', () => {
+  const b = $('resetProg');
+  if (!b.dataset.armed) {
+    b.dataset.armed = '1';
+    b.textContent = 'Tap again to erase progress';
+    resetTimer = setTimeout(() => { delete b.dataset.armed; b.textContent = 'Reset ladder'; }, 4000);
+    return;
+  }
+  clearTimeout(resetTimer);
+  delete b.dataset.armed;
+  b.textContent = 'Reset ladder';
+  progress = {};
+  saveProgress();
+  state.cur = null;
+  showSummary();
+});
+
+/* ---------- practice: attempt ---------- */
+
+function startAttempt(c) {
+  state.cur = c;
+  state.lvl = levelOf(c);
+  const cfg = LEVELS[state.lvl];
+  state.tokens = tokenize(c.lines);
+  state.mask = makeMask(state.tokens, cfg);
+  state.hiddenOrder = [...state.mask].sort((a, b) => a - b);
+  state.gaps = {}; state.bank = []; state.active = null; state.missed = new Set();
+  if (isChoice(cfg)) {
+    const items = state.hiddenOrder.map(k => state.tokens[k].core);
+    const have = new Set(items.map(norm));
+    const extra = cfg.perLine === 'all' ? [] : shuffle(state.wordList.filter(w => !have.has(norm(w)))).slice(0, 2);
+    state.bank = shuffle([...items, ...extra].map((t, i) => ({ id: i, text: t })));
+    state.active = state.hiddenOrder[0] ?? null;
+  }
+  state.helped = false; state.scored = false;
+  state.result = null; state.ratio = 0; state.phase = 'attempt';
+  prog(c.id).seen = Date.now();
+  renderAttempt();
+}
+
+function blanksHtml() {
+  const cfg = LEVELS[state.lvl];
+  const choice = isChoice(cfg);
+  let html = '';
+  state.tokens.forEach((t, k) => {
+    if (k > 0) html += t.li !== state.tokens[k - 1].li ? '<br>' : ' ';
+    if (!state.mask.has(k)) { html += esc(t.pre + t.core + t.post); return; }
+    const num = state.hiddenOrder.indexOf(k) + 1;
+    if (choice) {
+      html += `${esc(t.pre)}<button type="button" class="gap" data-slot="${k}" style="min-width:${Math.max(3, t.core.length)}ch" aria-label="Blank ${num}"><span class="pick"></span><span class="ans">${esc(t.core)}</span></button>${esc(t.post)}`;
+    } else {
+      const lead = cfg.lead ? `<span class="lead">${esc(t.core[0])}</span>` : '';
+      const w = cfg.lead ? Math.max(1, t.core.length - 1) : t.core.length;
+      html += `${esc(t.pre)}<span class="blank" data-slot="${k}">${lead}<input data-k="${k}" aria-label="Blank ${num}" autocomplete="off" autocapitalize="off" spellcheck="false" style="width:${w + 1}ch"><span class="ans">${esc(t.core)}</span></span>${esc(t.post)}`;
+    }
+  });
+  return html;
+}
+
+const byId = id => state.bank.find(b => b.id === id);
+const nextEmpty = () => state.hiddenOrder.find(k => state.gaps[k] === undefined) ?? null;
+
+function renderGaps() {
+  $('line').querySelectorAll('.gap').forEach(g => {
+    const k = +g.dataset.slot, id = state.gaps[k];
+    g.querySelector('.pick').textContent = id === undefined ? '' : byId(id).text;
+    g.classList.toggle('active', state.active === k && state.phase === 'attempt');
+  });
+  const used = new Set(Object.values(state.gaps));
+  $('choices').innerHTML = `<span class="label">Word bank</span><div class="bank">` +
+    state.bank.map(b => `<button type="button" class="opt" data-id="${b.id}"${used.has(b.id) || state.phase !== 'attempt' ? ' disabled' : ''}>${esc(b.text)}</button>`).join('') + `</div>`;
+}
+
+function renderMeter(delta = 0) {
+  $('meter').hidden = fixed();
+  if (fixed()) return;
+  const p = prog(state.cur.id);
+  $('fill').style.width = (p.pts / MAX() * 100) + '%';
+  $('meterTxt').textContent = `Level ${state.lvl + 1} of ${LEVELS.length}: ${LEVELS[state.lvl].name}`;
+  $('meterSub').textContent = p.pts >= MAX() ? 'Learned' : `${p.pts} / ${MAX()} steps`;
+  $('meter').dataset.move = delta > 0 ? 'up' : delta < 0 ? 'down' : '';
+  $('delta').className = 'delta' + (delta > 0 ? ' up' : delta < 0 ? ' down' : '');
+  $('delta').textContent = delta > 0 ? `▲ +${delta}` : delta < 0 ? `▼ −${-delta}` : '';
+  $('fill').parentElement.setAttribute('aria-valuenow', Math.round(p.pts / MAX() * 100));
+}
+
+// Applies the result of the first scored response for this attempt. Retries after a miss are practice only.
+function applyResult(delta, note) {
+  if (state.scored) return;
+  state.scored = true;
+  const p = prog(state.cur.id);
+  if (delta > 0) { p.passes++; p.streak = (p.streak || 0) + 1; }
+  else { p.streak = 0; if (delta < 0) p.misses++; }
+  const before = p.pts;
+  if (!fixed()) p.pts = Math.max(0, Math.min(MAX(), p.pts + delta));
+  saveProgress();
+  renderMeter(p.pts - before);
+  $('meterNote').textContent = fixed() ? '' : note;
+}
+
+function renderAttempt() {
+  const c = state.cur, cfg = LEVELS[state.lvl];
+  const n = state.chunks.indexOf(c) + 1;
+  $('passage').textContent = `${unitName()} ${n} of ${state.chunks.length}` +
+    (state.mode === 'script' ? ` · ${c.lines.length} ${c.lines.length === 1 ? 'line' : 'lines'}` : '');
+  $('modeSel').value = fixed() ? String(state.style) : 'ladder';
+  $('ansSel').value = state.answerMode;
+  $('ansWrap').hidden = !cfg.choice;
+  $('levelName').hidden = !fixed();
+  $('levelName').textContent = fixed() ? cfg.name : '';
+  $('meterNote').textContent = '';
+  renderMeter(0);
+
+  if (c.cueSpeaker) {
+    $('cue').innerHTML = `<span class="cue-speaker">${esc(c.cueSpeaker)}</span><p class="cue-text">${esc(c.cue)}</p>`;
+  } else if (state.mode === 'script') {
+    $('cue').innerHTML = `<span class="cue-speaker">Scene opens</span><p class="cue-text">You speak first. Recall your opening speech.</p>`;
+  } else {
+    $('cue').innerHTML = '';
+  }
+
+  const line = $('line');
+  line.classList.remove('peek', 'revealed');
+  $('feedback').hidden = true;
+  $('feedback').innerHTML = '';
+
+  if (cfg.mode === 'free') {
+    line.hidden = true;
+    $('choices').hidden = true;
+    $('free').hidden = false;
+    $('free').value = '';
+    $('free').focus();
+  } else {
+    $('free').hidden = true;
+    line.hidden = false;
+    line.innerHTML = cfg.mode === 'read' ? c.lines.map(esc).join('<br>') : blanksHtml();
+    const choice = isChoice(cfg);
+    $('choices').hidden = !choice;
+    if (choice) renderGaps(); else $('choices').innerHTML = '';
+    line.querySelector('input')?.focus();
+  }
+  setButtons();
+}
+
+function setButtons() {
+  const cfg = LEVELS[state.lvl];
+  const ph = state.phase;
+  const attempt = ph === 'attempt';
+  $('said').hidden = !(attempt && cfg.mode === 'read');
+  $('check').hidden = !(attempt && cfg.mode !== 'read');
+  $('peek').hidden = !(attempt && cfg.mode === 'blank');
+  $('reveal').hidden = !(attempt && cfg.mode !== 'read');
+  $('retry').hidden = ph !== 'fail';
+  $('next').hidden = !(ph === 'pass' || ph === 'fail' || ph === 'revealed');
+  $('next').textContent = ph === 'pass' ? 'Next' : 'Move on';
+}
+
+function fb(verdict, tone, extra = '') {
+  $('feedback').innerHTML = `<p class="verdict ${tone}">${verdict}</p>${extra}`;
+  $('feedback').hidden = false;
+}
+
+function check() {
+  const cfg = LEVELS[state.lvl];
+  let pass;
+  if (cfg.mode === 'free') {
+    const typed = $('free').value;
+    if (!typed.trim()) { $('free').focus(); return; }
+    const { tokens, hit, score } = grade(state.cur.text, typed);
+    state.ratio = score;
+    pass = score >= 0.9;
+    const pct = Math.round(score * 100);
+    const target = `<p class="target">${tokens.map((t, k) => hit[k] ? esc(t) : `<span class="miss">${esc(t)}</span>`).join(' ')}</p>`;
+    fb(pass ? `${pct}% match. Recalled.` : `${pct}% match. Missed words are underlined.`, pass ? 'good' : 'bad', target);
+  } else {
+    const choice = isChoice(cfg);
+    const total = state.hiddenOrder.length;
+    let right = 0;
+    state.hiddenOrder.forEach(k => {
+      const slot = $('line').querySelector(`[data-slot="${k}"]`);
+      const core = state.tokens[k].core;
+      let ok;
+      if (choice) {
+        ok = state.gaps[k] !== undefined && norm(byId(state.gaps[k]).text) === norm(core);
+      } else if (cfg.initial) {
+        // Typing the right first letter reveals the word. A wrong letter marks the blank missed.
+        ok = slot.classList.contains('assist') && !state.missed.has(k);
+      } else {
+        const v = slot.querySelector('input').value;
+        ok = norm(v) === norm(core) || (!!cfg.lead && norm(core[0] + v) === norm(core));
+      }
+      slot.classList.toggle('right', ok);
+      slot.classList.toggle('wrong', !ok);
+      if (ok) right++;
+    });
+    state.ratio = total ? right / total : 1;
+    pass = right === total;
+    fb(`${right} of ${total} blanks right. ${pass ? 'Clean recall.' : 'Corrections are shown in red.'}`, pass ? 'good' : 'bad');
+  }
+  if (pass && state.helped) fb('Recalled, but you peeked. The bar stays where it is.', 'note');
+  state.result = pass ? 'pass' : 'fail';
+  state.phase = state.result;
+  const streak = prog(state.cur.id).streak || 0;
+  if (pass && state.helped) applyResult(0, 'You peeked, so the bar holds.');
+  else if (pass && streak >= 1) applyResult(STEPS * 2, 'Clean again: jumped two levels.');
+  else if (pass) applyResult(STEPS, 'Clean recall: up a level.');
+  else if (state.ratio < 0.5) applyResult(-STEPS, 'Under half right: down a level.');
+  else if (state.ratio < 0.8) applyResult(-1, 'Missed some: down a half level.');
+  else applyResult(0, 'Nearly there: the bar holds. Try again.');
+  if (state.bank.length) renderGaps();
+  setButtons();
+  (pass ? $('next') : $('retry')).focus();
+}
+
+function retry() {
+  state.phase = 'attempt';
+  state.result = null;
+  $('line').querySelectorAll('[data-slot]').forEach(sl => sl.classList.remove('right', 'wrong'));
+  if (state.bank.length) {
+    state.hiddenOrder.forEach(k => {
+      const id = state.gaps[k];
+      if (id !== undefined && norm(byId(id).text) !== norm(state.tokens[k].core)) delete state.gaps[k];
+    });
+    state.active = nextEmpty();
+    renderGaps();
+  }
+  $('feedback').hidden = true;
+  $('meterNote').textContent = fixed() ? '' : 'Practice retry: the bar does not move again.';
+  setButtons();
+  const input = [...$('line').querySelectorAll('input')].find(i => !i.closest('.blank').classList.contains('assist'));
+  (input || $('free')).focus();
+}
+
+function reveal() {
+  state.helped = true;
+  const cfg = LEVELS[state.lvl];
+  if (cfg.mode === 'free') {
+    fb('Full monologue shown. That counts as a miss.', 'note', `<p class="target">${esc(state.cur.text)}</p>`);
+  } else {
+    $('line').classList.add('revealed');
+    fb('Answers shown. That counts as a miss.', 'note');
+  }
+  state.phase = 'revealed';
+  applyResult(-1, 'Answers shown: down a half level.');
+  if (state.bank.length) renderGaps();
+  setButtons();
+  $('next').focus();
+}
+
+function said() {
+  state.result = 'pass';
+  state.phase = 'pass';
+  fb('Marked as said aloud.', 'good');
+  prog(state.cur.id).read = true;
+  applyResult(STEPS, 'Said aloud: up a level.');
+  setButtons();
+  $('next').focus();
+}
+
+function next() {
+  const nxt = pickNext();
+  if (!nxt) return showSummary();
+  startAttempt(nxt);
+}
+
+// Peek: hold to show answers in place, release to hide. Counts as help.
+const peekOn = () => {
+  const cfg = LEVELS[state.lvl];
+  if (state.phase !== 'attempt' || cfg.mode !== 'blank') return;
+  state.helped = true;
+  $('line').classList.add('peek');
+};
+const peekOff = () => $('line').classList.remove('peek');
+$('peek').addEventListener('pointerdown', e => { e.preventDefault(); peekOn(); });
+['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => $('peek').addEventListener(ev, peekOff));
+
+// Word bank: tap a gap to target it (tap a filled gap to empty it), then tap a word. Words fill gaps in order otherwise.
+$('choices').addEventListener('click', e => {
+  const b = e.target.closest('.opt');
+  if (!b || state.phase !== 'attempt') return;
+  let k = state.active;
+  if (k === null || state.gaps[k] !== undefined) k = nextEmpty();
+  if (k === null) return;
+  state.gaps[k] = +b.dataset.id;
+  state.active = nextEmpty();
+  renderGaps();
+});
+$('line').addEventListener('click', e => {
+  const g = e.target.closest('.gap');
+  if (!g || state.phase !== 'attempt') return;
+  const k = +g.dataset.slot;
+  delete state.gaps[k];
+  state.active = k;
+  renderGaps();
+});
+
+// First-letter reveal: the right first letter swaps the blank for the full word; a wrong letter marks it missed.
+$('line').addEventListener('input', e => {
+  if (e.target.tagName !== 'INPUT' || !LEVELS[state.lvl].initial || state.phase !== 'attempt') return;
+  const v = e.target.value.trim();
+  if (!v) return;
+  const wrap = e.target.closest('.blank'), k = +wrap.dataset.slot;
+  if (wrap.classList.contains('assist')) return;
+  if (norm(v[0]) === norm(state.tokens[k].core[0])) {
+    wrap.classList.add('assist');
+    wrap.classList.remove('bad-letter');
+    const inputs = [...$('line').querySelectorAll('input')];
+    const after = inputs.slice(inputs.indexOf(e.target) + 1).find(i => !i.closest('.blank').classList.contains('assist'));
+    if (after) after.focus();
+    if (inputs.every(i => i.closest('.blank').classList.contains('assist'))) setTimeout(() => state.phase === 'attempt' && check(), 350);
+  } else {
+    state.missed.add(k);
+    e.target.value = '';
+    wrap.classList.add('bad-letter');
+  }
+});
+
+// Skip ahead or back: set the ladder position for this passage or for every passage.
+$('jumpSel').innerHTML = LEVELS.map((L, i) => `<option value="${i}">Level ${i + 1}: ${esc(L.name)}</option>`).join('');
+function jumpTo(chunks, lvl) {
+  chunks.forEach(c => { const p = prog(c.id); p.pts = lvl * STEPS; p.streak = 0; p.read = lvl > 0; });
+  saveProgress();
+  showSummary();
+  $('jumpMsg').textContent = `All passages moved to level ${lvl + 1}.`;
+}
+let jumpTimer;
+$('jumpAll').addEventListener('click', () => {
+  const b = $('jumpAll');
+  if (!b.dataset.armed) {
+    b.dataset.armed = '1';
+    b.textContent = 'Tap again to confirm';
+    jumpTimer = setTimeout(() => { delete b.dataset.armed; b.textContent = 'Move all passages'; }, 4000);
+    return;
+  }
+  clearTimeout(jumpTimer);
+  delete b.dataset.armed;
+  b.textContent = 'Move all passages';
+  jumpTo(state.chunks, +$('jumpSel').value);
+});
+
+// Mode switcher on the practice screen
+function syncStyleUI() {
+  document.querySelectorAll('input[name="style"]').forEach(r => { r.checked = r.value === String(state.style); });
+  document.querySelectorAll('input[name="answer"]').forEach(r => { r.checked = r.value === state.answerMode; });
+}
+$('modeSel').innerHTML = '<option value="ladder">Progressive ladder</option>' + LEVELS.map((L, i) => `<option value="${i}">${esc(L.name)}</option>`).join('');
+$('modeSel').addEventListener('change', () => {
+  const v = $('modeSel').value;
+  state.style = v === 'ladder' ? 'ladder' : Number(v);
+  syncStyleUI(); saveSetup(); startAttempt(state.cur);
+});
+$('ansSel').addEventListener('change', () => {
+  state.answerMode = $('ansSel').value;
+  syncStyleUI(); saveSetup(); startAttempt(state.cur);
+});
+
+$('check').addEventListener('click', check);
+$('retry').addEventListener('click', retry);
+$('reveal').addEventListener('click', reveal);
+$('said').addEventListener('click', said);
+$('next').addEventListener('click', next);
+
+// Enter moves between blanks; on the last blank it checks. Ctrl/Cmd+Enter always checks.
+$('line').addEventListener('keydown', e => {
+  if (e.key !== 'Enter' || e.target.tagName !== 'INPUT') return;
+  e.preventDefault();
+  if (e.ctrlKey || e.metaKey) return check();
+  const inputs = [...$('line').querySelectorAll('input')];
+  const idx = inputs.indexOf(e.target);
+  if (idx >= 0 && idx < inputs.length - 1) inputs[idx + 1].focus();
+  else check();
+});
+$('free').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); check(); }
+});
+
+/* ---------- run the scene ---------- */
+
+$('runBegin').addEventListener('click', () => {
+  const items = buildRun();
+  state.run = {
+    items, idx: 0,
+    lines: items.filter(i => i.kind === 'line').length,
+    moves: items.filter(i => i.kind === 'move').length,
+    linesRight: 0, movesDone: 0
+  };
+  $('runTranscript').innerHTML = '';
+  show('run');
+  runAdvance();
+});
+
+const speechHtml = it => it.lines.map(esc).join('<br>');
+
+function addEntry(html) {
+  const t = $('runTranscript');
+  t.insertAdjacentHTML('beforeend', html);
+  t.lastElementChild.scrollIntoView({ block: 'end' });
+}
+
+// Plays other characters' speeches and stage directions until the next speech or movement that needs a response.
+function runAdvance() {
+  const R = state.run;
+  while (R.idx < R.items.length) {
+    const it = R.items[R.idx];
+    if (it.kind === 'cue') addEntry(`<div class="t-cue"><span class="who">${esc(it.speaker)}</span>${speechHtml(it)}</div>`);
+    else if (it.kind === 'stage') addEntry(`<div class="t-stage">${esc(it.text)}</div>`);
+    else if (it.kind === 'line') return renderLinePrompt(it, 'ask');
+    else if (it.kind === 'move') return renderMovePrompt(it);
+    R.idx++;
+  }
+  finishRun();
+}
+
+function renderLinePrompt(it, phase, html = '') {
+  const btns = {
+    ask: `<button class="btn ghost" data-act="show">Show speech</button><span class="spacer"></span><button class="btn primary" data-act="check">Check</button>`,
+    fail: `<button class="btn ghost" data-act="show">Show speech</button><span class="spacer"></span><button class="btn ghost" data-act="retry">Try again</button><button class="btn primary" data-act="moveon">Move on</button>`,
+    shown: `<span class="spacer"></span><button class="btn primary" data-act="moveon">Move on</button>`
+  };
+  $('runPrompt').innerHTML =
+    `<span class="label">Your speech · ${esc(it.speaker)}</span>` +
+    `<p class="cue-text">${phase === 'shown' ? speechHtml(it) : 'Say it from memory, then type it here.'}</p>` +
+    (phase === 'shown' ? '' : `<textarea id="runAnswer" rows="5" spellcheck="false" placeholder="Type your speech"></textarea>`) +
+    `<div id="runFeedback" class="feedback">${html}</div>` +
+    `<div class="row">${btns[phase]}</div>`;
+  if ($('runAnswer')) $('runAnswer').focus();
+  else $('runPrompt').querySelector('[data-act]')?.focus();
+}
+
+function renderMovePrompt(it) {
+  $('runPrompt').innerHTML =
+    `<span class="label">Your move · ${esc(it.who)}</span>` +
+    `<p class="cue-text">${esc(it.text)}</p>` +
+    `<p class="keys">Make the movement, then tap Done.</p>` +
+    `<div class="row"><span class="spacer"></span><button class="btn primary" data-act="done">Done</button></div>`;
+  $('runPrompt').querySelector('[data-act]').focus();
+}
+
+function finishRun() {
+  const R = state.run;
+  $('runPrompt').innerHTML =
+    `<span class="label">Scene complete</span>` +
+    `<p class="cue-text">${R.linesRight} of ${R.lines} speeches recalled, ${R.movesDone} of ${R.moves} movements done.</p>` +
+    `<div class="row"><button class="btn ghost" data-act="setup">Back to setup</button><span class="spacer"></span><button class="btn primary" data-act="again">Run again</button></div>`;
+  $('runPrompt').querySelector('[data-act="again"]').focus();
+}
+
+$('runPrompt').addEventListener('click', e => {
+  const act = e.target.closest('[data-act]')?.dataset.act;
+  if (!act) return;
+  const R = state.run;
+  const it = R.items[R.idx];
+  if (act === 'check') {
+    const typed = $('runAnswer')?.value || '';
+    if (!typed.trim()) return $('runAnswer').focus();
+    const { tokens, hit, score } = grade(it.text, typed);
+    const pct = Math.round(score * 100);
+    if (score >= 0.9) {
+      R.linesRight++;
+      addEntry(`<div class="t-mine"><span class="who">${esc(it.speaker)}</span>${speechHtml(it)}</div>`);
+      R.idx++;
+      return runAdvance();
+    }
+    const target = tokens.map((t, k) => hit[k] ? esc(t) : `<span class="miss">${esc(t)}</span>`).join(' ');
+    renderLinePrompt(it, 'fail', `<p class="verdict bad">${pct}% match. Missed words are underlined.</p><p class="target">${target}</p>`);
+    $('runAnswer') && ($('runAnswer').value = typed);
+    return;
+  }
+  if (act === 'retry') return renderLinePrompt(it, 'ask');
+  if (act === 'show') return renderLinePrompt(it, 'shown');
+  if (act === 'moveon') {
+    addEntry(`<div class="t-mine"><span class="who">${esc(it.speaker)}</span>${speechHtml(it)}</div>`);
+    R.idx++;
+    return runAdvance();
+  }
+  if (act === 'done') {
+    R.movesDone++;
+    addEntry(`<div class="t-stage">${esc(it.who)}: ${esc(it.text)} (done)</div>`);
+    R.idx++;
+    return runAdvance();
+  }
+  if (act === 'again') return $('runBegin').click();
+  if (act === 'setup') return show('setup');
+});
+
+/* ---------- summary ---------- */
+
+function showSummary() {
+  const counts = Array(LEARNED + 1).fill(0);
+  state.chunks.forEach(c => counts[prog(c.id).pts >= MAX() ? LEARNED : lvlOfPts(prog(c.id).pts)]++);
+  const total = state.chunks.length;
+  const learned = counts[LEARNED];
+  const max = Math.max(1, ...counts);
+  const row = (label, n, cls = '') =>
+    `<div class="stat ${cls}"><span class="stat-label">${esc(label)}</span><span class="stat-count">${n}</span>` +
+    `<div class="stat-track"><div class="stat-fill" style="width:${(n / max) * 100}%"></div></div></div>`;
+  $('stats').innerHTML = LEVELS.map((L, i) => row(`Level ${i + 1}: ${L.name}`, counts[i])).join('') +
+    row('Learned', learned, 'learned');
+  $('sumLead').textContent = `${learned} of ${total} ${state.mode === 'script' ? 'monologues' : 'passages'} learned.`;
+  $('continue').hidden = !pickNext();
+  $('review').hidden = learned === 0 || fixed();
+  $('jumpBlock').hidden = fixed();
+  $('jumpMsg').textContent = '';
+  show('summary');
+}
+
+$('continue').addEventListener('click', () => {
+  const c = pickNext();
+  if (!c) return showSummary();
+  show('train');
+  startAttempt(c);
+});
+$('review').addEventListener('click', () => {
+  state.chunks.forEach(c => { if (prog(c.id).pts >= MAX()) prog(c.id).pts = TOP * STEPS; });
+  saveProgress();
+  const c = pickNext();
+  if (!c) return showSummary();
+  show('train');
+  startAttempt(c);
+});
+
+/* ---------- init ---------- */
+
+(function init() {
+  const saved = store.get(SAVE_KEY, { source: '', roles: [], style: 'ladder', answer: 'choice' });
+  $('source').value = (saved.source && saved.source.trim() !== OLD_SAMPLE.trim()) ? saved.source : SAMPLE;
+  state.roles = Array.isArray(saved.roles) ? saved.roles : [];
+  state.style = saved.style === undefined || saved.style === 'ladder' ? 'ladder' : Number(saved.style);
+  state.answerMode = saved.answer === 'type' ? 'type' : 'choice';
+  document.querySelectorAll('input[name="style"]').forEach(r => {
+    r.checked = state.style === 'ladder' ? r.value === 'ladder' : r.value === String(state.style);
+  });
+  document.querySelectorAll('input[name="answer"]').forEach(r => { r.checked = r.value === state.answerMode; });
+  refreshSetup();
+})();
+</script>
+</body>
+</html>
+
+</body></html>

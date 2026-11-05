@@ -262,7 +262,7 @@ textarea {
       <label><input type="radio" name="style" value="5"> Blank, first letter reveals word</label>
       <label><input type="radio" name="style" value="6"> Recall from cue</label>
     </fieldset>
-    <p class="hint">Easy hides about one word in three, medium about half, hard every word. On the ladder, every line is practiced once per loop, and levels only change when a loop ends. Then each line moves on its own result: one clean recall clears a level, two clean loops in a row jump two levels, and a clearly missed line moves back. A fixed level drills one kind of practice and does not change anyone’s progress.</p>
+    <p class="hint">Easy hides about one word in four, medium about half, hard every word. On the ladder, every line is practiced once per loop, and levels only change when a loop ends. Then each line moves on its own result: one clean recall clears a level, two clean loops in a row jump two levels, and a clearly missed line moves back. A fixed level drills one kind of practice and does not change anyone’s progress.</p>
 
     <fieldset class="seg">
       <legend class="label">Answer hidden words by</legend>
@@ -740,7 +740,7 @@ BENVOLIO: I’ll pay that doctrine or else die in debt.
 //   mode 'free': recall from the cue with nothing shown
 const LEVELS = [
   { name: 'Read aloud', mode: 'read' },
-  { name: 'Hidden words: easy (about 1 in 3)', mode: 'blank', perLine: 'mix', choice: true },
+  { name: 'Hidden words: easy (about 1 in 4)', mode: 'blank', perLine: 'mix', choice: true },
   { name: 'Hidden words: medium (about half)', mode: 'blank', perLine: 'half', choice: true },
   { name: 'Hidden words: hard (every word)', mode: 'blank', perLine: 'all', choice: true },
   { name: 'First letter shown', mode: 'blank', perLine: 'all', lead: true },
@@ -882,7 +882,7 @@ function makeMask(toks, cfg) {
   if (cfg.perLine === 'all') { idx.forEach(k => hidden.add(k)); return hidden; }
   // Walk the passage in groups of 2-3 words (easy) or 2 words (medium) and hide one word per group.
   for (let i = 0; i < idx.length;) {
-    const g = cfg.perLine === 'half' ? 2 : (Math.random() < .5 ? 2 : 3);
+    const g = cfg.perLine === 'half' ? 2 : [3, 4, 5][Math.floor(Math.random() * 3)];
     const grp = idx.slice(i, i + g);
     if (grp.length >= 2) hidden.add(grp[Math.floor(Math.random() * grp.length)]);
     i += g;
@@ -1101,10 +1101,10 @@ function blanksHtml() {
     if (!state.mask.has(k)) { html += esc(t.pre + t.core + t.post); return; }
     const num = state.hiddenOrder.indexOf(k) + 1;
     if (choice) {
-      html += `${esc(t.pre)}<button type="button" class="gap" data-slot="${k}" style="min-width:8ch" aria-label="Blank ${num}"><span class="pick"></span><span class="ans">${esc(t.core)}</span></button>${esc(t.post)}`;
+      html += `${esc(t.pre)}<button type="button" class="gap" data-slot="${k}" style="min-width:4ch" aria-label="Blank ${num}"><span class="pick"></span><span class="ans">${esc(t.core)}</span></button>${esc(t.post)}`;
     } else {
       const lead = cfg.lead ? `<span class="lead">${esc(t.core[0])}</span>` : '';
-      html += `${esc(t.pre)}<span class="blank" data-slot="${k}">${lead}<input data-k="${k}" aria-label="Blank ${num}" autocomplete="off" autocapitalize="off" spellcheck="false" style="width:8ch"><span class="ans">${esc(t.core)}</span></span>${esc(t.post)}`;
+      html += `${esc(t.pre)}<span class="blank" data-slot="${k}">${lead}<input data-k="${k}" aria-label="Blank ${num}" autocomplete="off" autocapitalize="off" spellcheck="false" style="width:4ch"><span class="ans">${esc(t.core)}</span></span>${esc(t.post)}`;
     }
   });
   return html;
@@ -1400,7 +1400,7 @@ $('jumpAll').addEventListener('click', () => {
 
 // Typed blanks all start the same width; one only grows if what you type outgrows it.
 $('line').addEventListener('input', e => {
-  if (e.target.tagName === 'INPUT') e.target.style.width = Math.max(8, e.target.value.length + 1) + 'ch';
+  if (e.target.tagName === 'INPUT') e.target.style.width = Math.max(4, e.target.value.length + 1) + 'ch';
 });
 
 // Mode switcher on the practice screen

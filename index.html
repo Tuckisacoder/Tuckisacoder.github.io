@@ -1077,11 +1077,10 @@ function blanksHtml() {
     if (!state.mask.has(k)) { html += esc(t.pre + t.core + t.post); return; }
     const num = state.hiddenOrder.indexOf(k) + 1;
     if (choice) {
-      html += `${esc(t.pre)}<button type="button" class="gap" data-slot="${k}" style="min-width:${Math.max(3, t.core.length)}ch" aria-label="Blank ${num}"><span class="pick"></span><span class="ans">${esc(t.core)}</span></button>${esc(t.post)}`;
+      html += `${esc(t.pre)}<button type="button" class="gap" data-slot="${k}" style="min-width:8ch" aria-label="Blank ${num}"><span class="pick"></span><span class="ans">${esc(t.core)}</span></button>${esc(t.post)}`;
     } else {
       const lead = cfg.lead ? `<span class="lead">${esc(t.core[0])}</span>` : '';
-      const w = cfg.lead ? Math.max(1, t.core.length - 1) : t.core.length;
-      html += `${esc(t.pre)}<span class="blank" data-slot="${k}">${lead}<input data-k="${k}" aria-label="Blank ${num}" autocomplete="off" autocapitalize="off" spellcheck="false" style="width:${w + 1}ch"><span class="ans">${esc(t.core)}</span></span>${esc(t.post)}`;
+      html += `${esc(t.pre)}<span class="blank" data-slot="${k}">${lead}<input data-k="${k}" aria-label="Blank ${num}" autocomplete="off" autocapitalize="off" spellcheck="false" style="width:8ch"><span class="ans">${esc(t.core)}</span></span>${esc(t.post)}`;
     }
   });
   return html;
@@ -1366,6 +1365,11 @@ $('jumpAll').addEventListener('click', () => {
   delete b.dataset.armed;
   b.textContent = 'Move all passages';
   jumpTo(state.chunks, +$('jumpSel').value);
+});
+
+// Typed blanks all start the same width; one only grows if what you type outgrows it.
+$('line').addEventListener('input', e => {
+  if (e.target.tagName === 'INPUT') e.target.style.width = Math.max(8, e.target.value.length + 1) + 'ch';
 });
 
 // Mode switcher on the practice screen

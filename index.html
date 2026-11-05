@@ -262,7 +262,7 @@ textarea {
       <label><input type="radio" name="style" value="5"> Blank, first letter reveals word</label>
       <label><input type="radio" name="style" value="6"> Recall from cue</label>
     </fieldset>
-    <p class="hint">Easy hides about one word in three, medium about half, hard every word. On the ladder, every passage is read aloud once before any of them moves on to hidden words. After that, one clean recall clears a level, two clean recalls in a row jump two levels, and only a clearly missed attempt moves you back. A fixed level drills one kind of practice and does not change anyone’s progress.</p>
+    <p class="hint">Easy hides about one word in three, medium about half, hard every word. On the ladder, every line is practiced once per loop, and levels only change when a loop ends. Then each line moves on its own result: one clean recall clears a level, two clean loops in a row jump two levels, and a clearly missed line moves back. A fixed level drills one kind of practice and does not change anyone’s progress.</p>
 
     <fieldset class="seg">
       <legend class="label">Answer hidden words by</legend>
@@ -312,7 +312,7 @@ textarea {
       <button id="check" class="btn primary">Check</button>
       <button id="next" class="btn primary" hidden>Next</button>
     </div>
-    <p class="keys">Word bank: tap a gap, then a word (or just tap words to fill gaps in order). Typing: Enter moves to the next blank, Ctrl or Cmd + Enter checks. On the ladder, a clean recall moves the bar up a level (two in a row jump two), a bad miss moves it down, a near miss or a peek holds it.</p>
+    <p class="keys">Word bank: tap a gap, then a word (or just tap words to fill gaps in order). Typing: Enter moves to the next blank, Ctrl or Cmd + Enter checks. On the ladder, a clean recall queues a level up (two clean loops in a row queue two), a bad miss queues a drop, a near miss or a peek holds. Changes apply when the loop ends.</p>
   </section>
 
   <section id="run" class="card" hidden aria-label="Run the scene">
@@ -1000,23 +1000,45 @@ function show(view) {
   $('run').hidden = view !== 'run';
 }
 
+// Ladder loops: every unlearned line is attempted once per loop. Results are queued and applied together when the loop ends,
+// so levels only change between loops, and each line moves on its own result.
+const LOOP_KEY = 'progressive-trainer:loop:v1';
+let loop = store.get(LOOP_KEY, { done: [] });
+const saveLoop = () => store.set(LOOP_KEY, loop);
+const loopPending = () => state.chunks.filter(c => prog(c.id).pts < MAX() && !loop.done.includes(c.id));
+const loopComplete = () => !fixed() && loop.done.length > 0 && loopPending().length === 0;
+function endLoop() {
+  const r = { up: 0, down: 0, hold: 0 };
+  state.chunks.forEach(c => {
+    if (!loop.done.includes(c.id)) return;
+    const p = prog(c.id), d = p.pending || 0;
+    p.pts = Math.max(0, Math.min(MAX(), p.pts + d));
+    p.pending = 0;
+    if (d > 0) r.up++; else if (d < 0) r.down++; else r.hold++;
+  });
+  loop = { done: [] };
+  saveLoop(); saveProgress();
+  return r;
+}
+function finishLoop() {
+  const r = endLoop();
+  showSummary();
+  $('sumLead').textContent += ` Loop complete: ${r.up} up, ${r.down} down, ${r.hold} held.`;
+}
+
 function pickNext() {
-  const pool = state.chunks.filter(c => fixed() || prog(c.id).pts < MAX());
-  if (!pool.length) return null;
   if (!fixed()) {
-    // Read-through first: every passage gets read aloud once, in script order, before any moves on to hidden words.
-    const unread = state.chunks.filter(c => !prog(c.id).read && prog(c.id).pts === 0);
-    if (unread.length) return unread.find(c => c !== state.cur) || unread[0];
+    const pend = loopPending();
+    return pend.find(c => c !== state.cur) || pend[0] || null;
   }
-  pool.sort((a, b) => fixed()
-    ? (prog(a.id).seen - prog(b.id).seen)
-    : (prog(a.id).pts - prog(b.id).pts) || (prog(a.id).seen - prog(b.id).seen));
-  return pool.find(c => c !== state.cur) || pool[0];
+  const pool = state.chunks.slice().sort((a, b) => prog(a.id).seen - prog(b.id).seen);
+  return pool.find(c => c !== state.cur) || pool[0] || null;
 }
 
 $('begin').addEventListener('click', () => {
   state.chunks = buildChunks();
   if (!state.chunks.length) return;
+  if (loopComplete()) return finishLoop();
   const c = pickNext();
   if (!c) return showSummary();
   show('train');
@@ -1040,6 +1062,8 @@ $('resetProg').addEventListener('click', () => {
   delete b.dataset.armed;
   b.textContent = 'Reset ladder';
   progress = {};
+  loop = { done: [] };
+  saveLoop();
   saveProgress();
   state.cur = null;
   showSummary();
@@ -1106,7 +1130,8 @@ function renderMeter(delta = 0) {
   const p = prog(state.cur.id);
   $('fill').style.width = (p.pts / MAX() * 100) + '%';
   $('meterTxt').textContent = `Level ${state.lvl + 1} of ${LEVELS.length}: ${LEVELS[state.lvl].name}`;
-  $('meterSub').textContent = p.pts >= MAX() ? 'Learned' : `${p.pts} / ${MAX()} steps`;
+  const inLoop = loop.done.length + loopPending().length;
+  $('meterSub').textContent = (p.pts >= MAX() ? 'Learned' : `${p.pts} / ${MAX()} steps`) + ` · ${loop.done.length} of ${inLoop} lines this loop`;
   $('meter').dataset.move = delta > 0 ? 'up' : delta < 0 ? 'down' : '';
   $('delta').className = 'delta' + (delta > 0 ? ' up' : delta < 0 ? ' down' : '');
   $('delta').textContent = delta > 0 ? `▲ +${delta}` : delta < 0 ? `▼ −${-delta}` : '';
@@ -1120,11 +1145,14 @@ function applyResult(delta, note) {
   const p = prog(state.cur.id);
   if (delta > 0) { p.passes++; p.streak = (p.streak || 0) + 1; }
   else { p.streak = 0; if (delta < 0) p.misses++; }
-  const before = p.pts;
-  if (!fixed()) p.pts = Math.max(0, Math.min(MAX(), p.pts + delta));
+  if (!fixed()) {
+    p.pending = delta;
+    if (!loop.done.includes(state.cur.id)) loop.done.push(state.cur.id);
+    saveLoop();
+  }
   saveProgress();
-  renderMeter(p.pts - before);
-  $('meterNote').textContent = fixed() ? '' : note;
+  renderMeter(delta);
+  $('meterNote').textContent = fixed() ? '' : note + (loopComplete() ? ' Last line of the loop: tap Next to see where every line lands.' : ' Applies when the loop ends.');
 }
 
 function renderAttempt() {
@@ -1287,6 +1315,7 @@ function said() {
 }
 
 function next() {
+  if (loopComplete()) return finishLoop();
   const nxt = pickNext();
   if (!nxt) return showSummary();
   startAttempt(nxt);
@@ -1347,7 +1376,9 @@ $('line').addEventListener('input', e => {
 // Skip ahead or back: set the ladder position for this passage or for every passage.
 $('jumpSel').innerHTML = LEVELS.map((L, i) => `<option value="${i}">Level ${i + 1}: ${esc(L.name)}</option>`).join('');
 function jumpTo(chunks, lvl) {
-  chunks.forEach(c => { const p = prog(c.id); p.pts = lvl * STEPS; p.streak = 0; p.read = lvl > 0; });
+  chunks.forEach(c => { const p = prog(c.id); p.pts = lvl * STEPS; p.streak = 0; p.read = lvl > 0; p.pending = 0; });
+  loop = { done: [] };
+  saveLoop();
   saveProgress();
   showSummary();
   $('jumpMsg').textContent = `All passages moved to level ${lvl + 1}.`;
@@ -1531,7 +1562,7 @@ function showSummary() {
   $('stats').innerHTML = LEVELS.map((L, i) => row(`Level ${i + 1}: ${L.name}`, counts[i])).join('') +
     row('Learned', learned, 'learned');
   $('sumLead').textContent = `${learned} of ${total} ${state.mode === 'script' ? 'monologues' : 'passages'} learned.`;
-  $('continue').hidden = !pickNext();
+  $('continue').hidden = !(pickNext() || loopComplete());
   $('review').hidden = learned === 0 || fixed();
   $('jumpBlock').hidden = fixed();
   $('jumpMsg').textContent = '';
@@ -1539,6 +1570,7 @@ function showSummary() {
 }
 
 $('continue').addEventListener('click', () => {
+  if (loopComplete()) return finishLoop();
   const c = pickNext();
   if (!c) return showSummary();
   show('train');
